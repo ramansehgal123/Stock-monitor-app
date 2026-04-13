@@ -107,30 +107,38 @@ def get_cooldown_remaining(symbol):
 # DATA FETCHING
 # ========================================
 
-def get_stock_data(symbol):
+@st.cache_data(ttl=600)  # Cache for 10 minutes to reduce API calls
+def get_stock_data(symbol, retry_count=0):
     """Fetch comprehensive stock data including 26W and 52W highs/lows"""
+    max_retries = 3
+    
     try:
+        # Add delay to avoid rate limiting
+        if retry_count > 0:
+            time.sleep(2 * retry_count)  # Exponential backoff
+        
         ticker = yf.Ticker(symbol)
         
-        # Get current price
-        hist = ticker.history(period='1d')
-        if hist.empty:
-            return None
-        current_price = hist['Close'].iloc[-1]
-        
-        # Get 26-week data
-        hist_26w = ticker.history(period='6mo')
-        low_26 = hist_26w['Low'].min()
-        high_26 = hist_26w['High'].max()
-        
-        # Get 52-week data
+        # Get 1-year data (includes current price and 52W data)
         hist_52w = ticker.history(period='1y')
+        if hist_52w.empty:
+            return None
+        
+        current_price = hist_52w['Close'].iloc[-1]
         low_52 = hist_52w['Low'].min()
         high_52 = hist_52w['High'].max()
         
-        # Get stock info
-        info = ticker.info
-        stock_name = info.get('longName', symbol)
+        # Get 26-week data from the same 1y data to avoid extra API call
+        hist_26w = hist_52w.tail(130)  # Approximately 26 weeks (6 months)
+        low_26 = hist_26w['Low'].min()
+        high_26 = hist_26w['High'].max()
+        
+        # Get stock name (with fallback to avoid API call if it fails)
+        try:
+            info = ticker.info
+            stock_name = info.get('longName', symbol)
+        except:
+            stock_name = symbol  # Fallback to symbol if info fails
         
         # Calculate distances
         d26_low = pct_from_low(current_price, low_26)
@@ -152,9 +160,22 @@ def get_stock_data(symbol):
             'd52_high': d52_high,
             'timestamp': datetime.now()
         }
+        
     except Exception as e:
-        st.error(f"Error fetching {symbol}: {str(e)}")
-        return None
+        error_msg = str(e)
+        
+        # Check if it's a rate limit error
+        if "Too Many Requests" in error_msg or "429" in error_msg:
+            if retry_count < max_retries:
+                st.warning(f"â³ Rate limit hit for {symbol}. Retrying... ({retry_count + 1}/{max_retries})")
+                time.sleep(3)  # Wait 3 seconds before retry
+                return get_stock_data(symbol, retry_count + 1)
+            else:
+                st.error(f"âŒ Rate limit exceeded for {symbol}. Please try again in a few minutes.")
+                return None
+        else:
+            st.error(f"Error fetching {symbol}: {error_msg}")
+            return None
 
 # ========================================
 # WHATSAPP ALERTS
@@ -305,6 +326,17 @@ def main():
     st.title("ðŸ“ˆ Indian Stock Market Monitor")
     st.markdown("**NIFTY 50 + Custom Stocks + Portfolio Tracking with 26W & 52W Analysis**")
     
+    # Rate limit info
+    if st.session_state.last_check_time:
+        minutes_since_check = (datetime.now() - st.session_state.last_check_time).seconds // 60
+        if minutes_since_check < 10:
+            st.info(f"â„¹ï¸ Data is cached (refreshed {minutes_since_check} min ago). Yahoo Finance has rate limits - please wait 10 minutes between refreshes for best results.")
+    
+    # Declare variables that will be set in sidebar
+    auto_refresh_enabled = False
+    refresh_interval = 10
+    enable_whatsapp = False
+    
     # ========================================
     # SIDEBAR CONFIGURATION
     # ========================================
@@ -367,15 +399,41 @@ def main():
         st.markdown("---")
         enable_whatsapp = st.checkbox("ðŸ“± Enable WhatsApp Alerts")
         
-        # Refresh
+        # Auto-refresh settings
         st.markdown("---")
-        if st.button("ðŸ”ƒ Refresh Data", type="primary", use_container_width=True):
+        st.subheader("ðŸ”„ Auto-Refresh")
+        auto_refresh_enabled = st.checkbox("Enable Auto-Refresh", value=False)
+        
+        if auto_refresh_enabled:
+            refresh_interval = st.selectbox(
+                "Refresh Interval",
+                options=[5, 10, 15, 30],
+                index=1,
+                format_func=lambda x: f"{x} minutes",
+                help="How often to automatically refresh data"
+            )
+        else:
+            refresh_interval = 10  # Default when disabled
+        
+        # Manual refresh button
+        st.markdown("---")
+        if st.button("ðŸ”ƒ Refresh Now", type="primary", use_container_width=True):
             st.session_state.last_check_time = None
             st.rerun()
         
-        # Last check time
+        # Last check time and countdown
         if st.session_state.last_check_time:
             st.caption(f"Last checked: {st.session_state.last_check_time.strftime('%H:%M:%S')}")
+            
+            if auto_refresh_enabled:
+                elapsed = (datetime.now() - st.session_state.last_check_time).seconds
+                remaining = (refresh_interval * 60) - elapsed
+                
+                if remaining > 0:
+                    mins, secs = divmod(remaining, 60)
+                    st.caption(f"â±ï¸ Next refresh in: {mins}m {secs}s")
+                else:
+                    st.caption("â±ï¸ Refreshing now...")
     
     # ========================================
     # DETERMINE STOCKS TO MONITOR
@@ -399,14 +457,29 @@ def main():
     with st.spinner(f"ðŸ“Š Fetching data for {len(stocks_to_track)} stocks..."):
         stock_data_list = []
         progress_bar = st.progress(0)
+        status_text = st.empty()
         
-        for idx, symbol in enumerate(stocks_to_track):
-            data = get_stock_data(symbol)
-            if data:
-                stock_data_list.append(data)
-            progress_bar.progress((idx + 1) / len(stocks_to_track))
+        # Batch processing to avoid rate limits
+        batch_size = 5  # Process 5 stocks at a time
+        
+        for batch_start in range(0, len(stocks_to_track), batch_size):
+            batch_end = min(batch_start + batch_size, len(stocks_to_track))
+            batch = stocks_to_track[batch_start:batch_end]
+            
+            for symbol in batch:
+                status_text.text(f"Fetching {symbol}... ({batch_start + batch.index(symbol) + 1}/{len(stocks_to_track)})")
+                data = get_stock_data(symbol)
+                if data:
+                    stock_data_list.append(data)
+                time.sleep(0.5)  # 500ms delay between each stock
+                progress_bar.progress((batch_start + batch.index(symbol) + 1) / len(stocks_to_track))
+            
+            # Longer delay between batches
+            if batch_end < len(stocks_to_track):
+                time.sleep(2)  # 2 second delay between batches
         
         progress_bar.empty()
+        status_text.empty()
         st.session_state.stock_data = stock_data_list
         st.session_state.last_check_time = datetime.now()
     
@@ -644,6 +717,25 @@ def main():
         file_name=f"stock_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
         mime="text/csv"
     )
+    
+    # ========================================
+    # AUTO-REFRESH LOGIC
+    # ========================================
+    
+    if auto_refresh_enabled and st.session_state.last_check_time:
+        # Check if it's time to auto-refresh
+        elapsed_seconds = (datetime.now() - st.session_state.last_check_time).seconds
+        refresh_threshold = refresh_interval * 60  # Convert to seconds
+        
+        if elapsed_seconds >= refresh_threshold:
+            st.info("ðŸ”„ Auto-refreshing data...")
+            time.sleep(1)  # Brief pause for user to see message
+            st.session_state.last_check_time = None
+            st.rerun()
+        else:
+            # Schedule next check in 5 seconds to update countdown
+            time.sleep(5)
+            st.rerun()
 
 if __name__ == "__main__":
     main()
