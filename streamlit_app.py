@@ -29,7 +29,7 @@ def get_nifty50_symbols():
         'RELIANCE.NS','TCS.NS','INFY.NS','HDFCBANK.NS','ICICIBANK.NS',
         'KOTAKBANK.NS','SBIN.NS','BHARTIARTL.NS','ITC.NS','LT.NS',
         'HINDUNILVR.NS','ASIANPAINT.NS','AXISBANK.NS','BAJFINANCE.NS',
-        'BAJAJFINSV.NS','MARUTI.NS','M&M.NS','TATAMOTORS.NS','SUNPHARMA.NS',
+        'BAJAJFINSV.NS','MARUTI.NS','M&M.NS','SUNPHARMA.NS',
         'DRREDDY.NS','CIPLA.NS','DIVISLAB.NS','ULTRACEMCO.NS','TITAN.NS',
         'NESTLEIND.NS','POWERGRID.NS','NTPC.NS','ONGC.NS','COALINDIA.NS',
         'JSWSTEEL.NS','TATASTEEL.NS','HINDALCO.NS','GRASIM.NS','ADANIENT.NS',
@@ -37,6 +37,7 @@ def get_nifty50_symbols():
         'TECHM.NS','WIPRO.NS','HCLTECH.NS','LTIM.NS','BRITANNIA.NS',
         'EICHERMOT.NS','HEROMOTOCO.NS','BAJAJ-AUTO.NS','UPL.NS',
         'APOLLOHOSP.NS','SHRIRAMFIN.NS','SBICARD.NS'
+        # Note: TATAMOTORS.NS removed due to data issues
     ]
 
 DEFAULT_CUSTOM_STOCKS = ['BPCL.NS', 'ASIANPAINT.NS']
@@ -167,11 +168,11 @@ def get_stock_data(symbol, retry_count=0):
         # Check if it's a rate limit error
         if "Too Many Requests" in error_msg or "429" in error_msg:
             if retry_count < max_retries:
-                st.warning(f" Rate limit hit for {symbol}. Retrying... ({retry_count + 1}/{max_retries})")
+                st.warning(f"â³ Rate limit hit for {symbol}. Retrying... ({retry_count + 1}/{max_retries})")
                 time.sleep(3)  # Wait 3 seconds before retry
                 return get_stock_data(symbol, retry_count + 1)
             else:
-                st.error(f" Rate limit exceeded for {symbol}. Please try again in a few minutes.")
+                st.error(f"âŒ Rate limit exceeded for {symbol}. Please try again in a few minutes.")
                 return None
         else:
             st.error(f"Error fetching {symbol}: {error_msg}")
@@ -191,13 +192,13 @@ def send_whatsapp_alert(stock_data, alert_type, low_threshold, high_threshold, p
         to_whatsapp = st.secrets.get("TWILIO_WHATSAPP_TO", "")
         
         if not all([account_sid, auth_token, from_whatsapp, to_whatsapp]):
-            st.warning(" ï¸ Twilio credentials not configured in secrets.")
+            st.warning("âš ï¸ Twilio credentials not configured in secrets.")
             return False
         
         # Check cooldown
         if not should_send_alert(stock_data['symbol']):
             remaining = get_cooldown_remaining(stock_data['symbol'])
-            st.info(f" Alert cooldown active. Next alert in {remaining} minutes.")
+            st.info(f"â³ Alert cooldown active. Next alert in {remaining} minutes.")
             return False
         
         client = Client(account_sid, auth_token)
@@ -207,30 +208,30 @@ def send_whatsapp_alert(stock_data, alert_type, low_threshold, high_threshold, p
         
         if alert_type == "HIGH":
             message = (
-                f" NEAR 52W HIGH (YOUR STOCK)\n\n"
-                f" {stock_data['name']} ({stock_data['symbol']})\n\n"
-                f" Price: â‚¹{stock_data['price']:.2f}\n\n"
-                f" 52W High: â‚¹{stock_data['high_52']:.2f} ({stock_data['d52_high']:.2f}% below)\n\n"
-                f" {stock_data['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}"
+                f"ðŸ’° NEAR 52W HIGH (YOUR STOCK)\n\n"
+                f"ðŸ“Š {stock_data['name']} ({stock_data['symbol']})\n\n"
+                f"ðŸ’° Price: â‚¹{stock_data['price']:.2f}\n\n"
+                f"ðŸ“ˆ 52W High: â‚¹{stock_data['high_52']:.2f} ({stock_data['d52_high']:.2f}% below)\n\n"
+                f"â° {stock_data['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}"
             )
         else:
             # Low alert with full context
             if stock_data['d26_low'] <= low_threshold and stock_data['d52_low'] <= low_threshold:
-                alert_msg = " NEAR BOTH 26W & 52W LOWS"
+                alert_msg = "ðŸ”¥ NEAR BOTH 26W & 52W LOWS"
             elif stock_data['d52_low'] <= low_threshold:
-                alert_msg = "NEAR 52W LOW"
+                alert_msg = "ðŸš¨ NEAR 52W LOW"
             else:
-                alert_msg = "NEAR 26W LOW"
+                alert_msg = "âš ï¸ NEAR 26W LOW"
             
             message = (
                 f"{alert_msg}\n\n"
-                f" {stock_data['name']} ({stock_data['symbol']})\n\n"
-                f"Price: â‚¹{stock_data['price']:.2f}\n\n"
-                f"26W Low: â‚¹{stock_data['low_26']:.2f} ({stock_data['d26_low']:.2f}%)\n"
-                f"52W Low: â‚¹{stock_data['low_52']:.2f} ({stock_data['d52_low']:.2f}%)\n\n"
-                f"26W High: â‚¹{stock_data['high_26']:.2f} ({stock_data['d26_high']:.2f}% below)\n"
-                f"52W High: â‚¹{stock_data['high_52']:.2f} ({stock_data['d52_high']:.2f}% below)\n\n"
-                f"{stock_data['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}"
+                f"ðŸ“Š {stock_data['name']} ({stock_data['symbol']})\n\n"
+                f"ðŸ’° Price: â‚¹{stock_data['price']:.2f}\n\n"
+                f"ðŸ“‰ 26W Low: â‚¹{stock_data['low_26']:.2f} ({stock_data['d26_low']:.2f}%)\n"
+                f"ðŸ“‰ 52W Low: â‚¹{stock_data['low_52']:.2f} ({stock_data['d52_low']:.2f}%)\n\n"
+                f"ðŸ“ˆ 26W High: â‚¹{stock_data['high_26']:.2f} ({stock_data['d26_high']:.2f}% below)\n"
+                f"ðŸ“ˆ 52W High: â‚¹{stock_data['high_52']:.2f} ({stock_data['d52_high']:.2f}% below)\n\n"
+                f"â° {stock_data['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}"
             )
         
         client.messages.create(
@@ -323,14 +324,14 @@ def create_stock_chart(symbol, stock_data):
 
 def main():
     # Header
-    st.title("Indian Stock Market Monitor")
+    st.title("ðŸ“ˆ Indian Stock Market Monitor")
     st.markdown("**NIFTY 50 + Custom Stocks + Portfolio Tracking with 26W & 52W Analysis**")
     
     # Rate limit info
     if st.session_state.last_check_time:
         minutes_since_check = (datetime.now() - st.session_state.last_check_time).seconds // 60
         if minutes_since_check < 10:
-            st.info(f"Data is cached (refreshed {minutes_since_check} min ago). Yahoo Finance has rate limits - please wait 10 minutes between refreshes for best results.")
+            st.info(f"â„¹ï¸ Data is cached (refreshed {minutes_since_check} min ago). Yahoo Finance has rate limits - please wait 10 minutes between refreshes for best results.")
     
     # Declare variables that will be set in sidebar
     auto_refresh_enabled = False
@@ -365,7 +366,7 @@ def main():
             custom_stocks = []
         
         # Portfolio stocks
-        st.subheader("Portfolio Stocks")
+        st.subheader("ðŸ’¼ Portfolio Stocks")
         st.caption("Stocks you own - will get HIGH alerts too")
         portfolio_input = st.text_area(
             "Enter portfolio stocks (one per line)",
@@ -377,7 +378,7 @@ def main():
         
         # Alert thresholds
         st.markdown("---")
-        st.subheader("Alert Thresholds")
+        st.subheader("ðŸŽ¯ Alert Thresholds")
         
         low_alert_threshold = st.slider(
             "Low Alert (%)",
@@ -401,7 +402,7 @@ def main():
         
         # Auto-refresh settings
         st.markdown("---")
-        st.subheader("Auto-Refresh")
+        st.subheader("ðŸ”„ Auto-Refresh")
         auto_refresh_enabled = st.checkbox("Enable Auto-Refresh", value=False)
         
         if auto_refresh_enabled:
@@ -447,14 +448,14 @@ def main():
         stocks_to_track = list(set(custom_stocks + portfolio_stocks))
     
     if not stocks_to_track:
-        st.warning("Please add at least one stock symbol in the sidebar")
+        st.warning("âš ï¸ Please add at least one stock symbol in the sidebar")
         return
     
     # ========================================
     # FETCH STOCK DATA
     # ========================================
     
-    with st.spinner(f"Fetching data for {len(stocks_to_track)} stocks..."):
+    with st.spinner(f"ðŸ“Š Fetching data for {len(stocks_to_track)} stocks..."):
         stock_data_list = []
         progress_bar = st.progress(0)
         status_text = st.empty()
@@ -483,8 +484,13 @@ def main():
         st.session_state.stock_data = stock_data_list
         st.session_state.last_check_time = datetime.now()
     
+    # Show summary of failed stocks if any
+    failed_count = len(stocks_to_track) - len(stock_data_list)
+    if failed_count > 0:
+        st.warning(f"âš ï¸ {failed_count} stock(s) could not be loaded. Data may be unavailable or symbol invalid.")
+    
     if not stock_data_list:
-        st.error("No stock data available. Please check your connection.")
+        st.error("âŒ No stock data available. Please check your internet connection and stock symbols.")
         return
     
     # ========================================
@@ -505,7 +511,7 @@ def main():
     # SUMMARY METRICS
     # ========================================
     
-    st.header("Summary")
+    st.header("ðŸ“Š Summary")
     col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
@@ -523,14 +529,14 @@ def main():
     # ALERTS SECTION
     # ========================================
     
-    st.header("Alerts")
+    st.header("ðŸ”” Alerts")
     
     # HIGH ALERTS (Portfolio stocks near 52W high)
     if high_stocks:
-        st.success(f"**{len(high_stocks)} Portfolio Stock(s) Near 52-Week HIGH** - Selling Opportunity!")
+        st.success(f"ðŸ’° **{len(high_stocks)} Portfolio Stock(s) Near 52-Week HIGH** - Selling Opportunity!")
         
         for stock in high_stocks:
-            with st.expander(f"{stock['name']} ({stock['symbol']}) - Portfolio", expanded=True):
+            with st.expander(f"ðŸ’° {stock['name']} ({stock['symbol']}) - Portfolio", expanded=True):
                 col1, col2 = st.columns([3, 1])
                 
                 with col1:
@@ -541,13 +547,13 @@ def main():
                 
                 with col2:
                     if enable_whatsapp:
-                        if st.button(f"Alert", key=f"high_{stock['symbol']}"):
+                        if st.button(f"ðŸ“± Alert", key=f"high_{stock['symbol']}"):
                             if send_whatsapp_alert(stock, "HIGH", low_alert_threshold, high_alert_threshold, portfolio_stocks):
                                 st.success("âœ… Sent!")
     
     # LOW ALERTS
     if low_both_stocks:
-        st.warning(f"**{len(low_both_stocks)} Stock(s) Near BOTH 26W & 52W Lows**")
+        st.warning(f"ðŸ”¥ **{len(low_both_stocks)} Stock(s) Near BOTH 26W & 52W Lows**")
         
         for stock in low_both_stocks:
             is_portfolio = stock['symbol'] in portfolio_stocks
@@ -559,39 +565,41 @@ def main():
             if is_nifty:
                 badges += '<span class="nifty-badge">NIFTY 50</span>'
             
-            with st.expander(f"{stock['name']} ({stock['symbol']})", expanded=True):
+            with st.expander(f"ðŸ”¥ {stock['name']} ({stock['symbol']})", expanded=True):
                 if badges:
                     st.markdown(badges, unsafe_allow_html=True)
                 
                 col1, col2, col3 = st.columns([2, 2, 1])
                 
                 with col1:
-                    st.markdown("**Low Levels:**")
-                    st.markdown(f"26W Low: ‚¹{stock['low_26']:.2f} ({stock['d26_low']:.2f}%)")
-                    st.markdown(f"52W Low: ‚¹{stock['low_52']:.2f} ({stock['d52_low']:.2f}%)")
+                    st.markdown("**ðŸ“‰ Low Levels:**")
+                    st.markdown(f"26W Low: â‚¹{stock['low_26']:.2f} ({stock['d26_low']:.2f}%)")
+                    st.markdown(f"52W Low: â‚¹{stock['low_52']:.2f} ({stock['d52_low']:.2f}%)")
                 
                 with col2:
-                    st.markdown("**High Levels:**")
-                    st.markdown(f"26W High: ‚¹{stock['high_26']:.2f} ({stock['d26_high']:.2f}% below)")
-                    st.markdown(f"52W High: ‚¹{stock['high_52']:.2f} ({stock['d52_high']:.2f}% below)")
+                    st.markdown("**ðŸ“ˆ High Levels:**")
+                    st.markdown(f"26W High: â‚¹{stock['high_26']:.2f} ({stock['d26_high']:.2f}% below)")
+                    st.markdown(f"52W High: â‚¹{stock['high_52']:.2f} ({stock['d52_high']:.2f}% below)")
                 
                 with col3:
-                    st.markdown(f"**Price:** ‚¹{stock['price']:.2f}")
+                    st.markdown(f"**Price:** â‚¹{stock['price']:.2f}")
                     if enable_whatsapp:
-                        if st.button(f"", key=f"low_{stock['symbol']}"):
+                        if st.button(f"ðŸ“±", key=f"low_{stock['symbol']}"):
                             if send_whatsapp_alert(stock, "LOW", low_alert_threshold, high_alert_threshold, portfolio_stocks):
                                 st.success("âœ…")
     
     elif low_52_stocks or low_26_stocks:
-        st.info(f"¸ **{len(set(low_26_stocks + low_52_stocks))} Stock(s) Near Low Levels**")
+        # Get unique count by symbols (not dict objects)
+        unique_symbols = set([s['symbol'] for s in low_26_stocks] + [s['symbol'] for s in low_52_stocks])
+        st.info(f"â„¹ï¸ **{len(unique_symbols)} Stock(s) Near Low Levels**")
     else:
-        st.success("No stocks at alert levels")
+        st.success("âœ… No stocks at alert levels")
     
     # ========================================
     # DETAILED STOCK VIEW
     # ========================================
     
-    st.header("Detailed Stock Analysis")
+    st.header("ðŸ“ˆ Detailed Stock Analysis")
     
     # Filter options
     filter_option = st.radio(
@@ -671,7 +679,7 @@ def main():
                 # Chart
                 fig = create_stock_chart(stock['symbol'], stock)
                 if fig:
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width='stretch')
     
     # ========================================
     # DATA TABLE
@@ -707,12 +715,12 @@ def main():
     for col in ['% from 26W Low', '% from 52W Low', '% from 26W High', '% from 52W High']:
         df_display[col] = df_display[col].apply(lambda x: f"{x:.2f}%")
     
-    st.dataframe(df_display, use_container_width=True, hide_index=True)
+    st.dataframe(df_display, width='stretch', hide_index=True)
     
     # Download button
     csv = df_display.to_csv(index=False)
     st.download_button(
-        label="Download as CSV",
+        label="ðŸ“¥ Download as CSV",
         data=csv,
         file_name=f"stock_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
         mime="text/csv"
@@ -728,7 +736,7 @@ def main():
         refresh_threshold = refresh_interval * 60  # Convert to seconds
         
         if elapsed_seconds >= refresh_threshold:
-            st.info("Auto-refreshing data...")
+            st.info("ðŸ”„ Auto-refreshing data...")
             time.sleep(1)  # Brief pause for user to see message
             st.session_state.last_check_time = None
             st.rerun()
