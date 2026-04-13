@@ -584,7 +584,7 @@ def main():
                 with col3:
                     st.markdown(f"**Price:** {stock['price']:.2f}")
                     if enable_whatsapp:
-                        if st.button(f"key=f"low_{stock['symbol']}"):
+                        if st.button(f" ",key=f"low_{stock['symbol']}"):
                             if send_whatsapp_alert(stock, "LOW", low_alert_threshold, high_alert_threshold, portfolio_stocks):
                                 st.success("âœ…")
     
