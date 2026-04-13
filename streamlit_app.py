@@ -398,7 +398,7 @@ def main():
         
         # WhatsApp alerts
         st.markdown("---")
-        enable_whatsapp = st.checkbox("ðŸ“± Enable WhatsApp Alerts")
+        enable_whatsapp = st.checkbox("Enable WhatsApp Alerts")
         
         # Auto-refresh settings
         st.markdown("---")
