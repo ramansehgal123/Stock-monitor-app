@@ -710,7 +710,7 @@ def main():
     
     # Format numbers
     for col in ['Price', '26W Low', '52W Low', '26W High', '52W High']:
-        df_display[col] = df_display[col].apply(lambda x: f"â‚¹{x:.2f}")
+        df_display[col] = df_display[col].apply(lambda x: f"{x:.2f}")
     
     for col in ['% from 26W Low', '% from 52W Low', '% from 26W High', '% from 52W High']:
         df_display[col] = df_display[col].apply(lambda x: f"{x:.2f}%")
@@ -720,7 +720,7 @@ def main():
     # Download button
     csv = df_display.to_csv(index=False)
     st.download_button(
-        label="ðŸ“¥ Download as CSV",
+        label="Download as CSV",
         data=csv,
         file_name=f"stock_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
         mime="text/csv"
